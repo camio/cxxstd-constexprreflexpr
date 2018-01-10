@@ -21,12 +21,14 @@ natural-syntax-based reflection library would look like.
 
 ## Introduction
 
+- TODO: introduce TMP-reflexpr and CXP-reflexpr
+
 Compile time
 
 ```c++
 template <typename T>
 void dump() {
-    refl::Type t = reflexpr(T);
+    constexpr refl::Type t = reflexpr(T);
     std::cout << "name: " << t.get_display_name() << std::endl;
     std::cout << "members:" << std::endl;
     for(RecordMember member : t.get_public_data_members())
@@ -59,7 +61,7 @@ void dumpJson(std::string s);
 template <typename T>
 void dumpJson(T t) {
     std::cout << "{ ";
-    refl::Type t = reflexpr(T);
+    constexpr refl::Type t = reflexpr(T);
     bool saw_prev = false;
     for...(RecordMember member : t.get_public_data_members())
     {
@@ -67,7 +69,7 @@ void dumpJson(T t) {
             std::cout << ", ";
         }
 
-        refl::Type pointerToMember = member.get_pointer();
+        constexpr refl::Type pointerToMember = member.get_pointer();
         std::cout
             << member.get_name()
             << "=" << unreflexpr(pointerToMember);
@@ -87,11 +89,75 @@ int main {
 }
 ```
 
+## Requirements for feature parity with template metaprogramming reflexpr
 
+The `for...` construct and constexpr-time allocatores are not, strictly
+speaking, required for achieving feature parity with TMP-reflexpr. Uses of
+`for...` could be replaced with a template-based iteration function. Custom,
+fixed-size types could be used as alternative to compile-time allocators. There
+is one thing that is critical, however, and that is `unreflexpr` for types.
+
+With TMP-reflexpr, types are easily extracted because we are already in a type
+context.
+
+```
+// 'foo' has a type that is the same as the first field of 'S'.
+get_reflected_type_t<
+  get_type_t<
+    get_element_t<
+        0,
+        get_public_data_members_t<reflexpr(S)>>>> foo;
+```
+
+With CXP-reflexpr, on the other hand, once we have a 'Type' object, there isn't
+a language facility for going back into type processing
+
+```
+constexpr Type t = reflexpr(S).get_public_data_members()[0].get_type();
+
+// unreflexpr required to create 'foo' with the type that 't' refers to.
+unreflexpr(t) foo;
+```
+
+## Typeful reflection
+
+Some of the initial sketeches for constexpr-based reflection had the `reflexpr`
+operation produce values that are always of the same type. While this has some
+advantages to implementers, we feel that making proper use of types will
+encourage programming that is easier to read and reason about.
+
+## Sketch of data types and operations
+
+```
+class Object {
+    std::source_location get_source_location() const;
+    int get_source_line() const;
+    int get_source_column() const;
+    std::string get_source_file_name() const;
+};
+``` 
+
+```
+class Named {
+    bool is_anonymous() const;
+    std::string get_name() const;
+    std::string get_display_name() const;
+};
+```
+
+```
+class Type : public Object, public Named
+{
+public:
+    bool is_enum() const;
+    bool is_class() const;
+    bool is_struct() const;
+    bool is_union() const;
+}
+```
 
 ## TODO
 
-- Discuss the need for type reflection for feature parity.
 - Discuss the decision made for typeful reflected data types.
 - Discuss the need to add non-template-metaprogramming-styled library
   features that already exist in the template metaprogramming form.
