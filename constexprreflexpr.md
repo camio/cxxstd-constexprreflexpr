@@ -238,8 +238,8 @@ example. While they can certainly be used in the CXP-reflexpr paradigm, it is
 awkward:
 
 ```
-    Type p = /*...*/;
-    Type constP = reflexpr(std::add_const_t<unreflexpr(P)>);
+Type p = /*...*/;
+Type constP = reflexpr(std::add_const_t<unreflexpr(P)>);
 ```
 
 We propose that each of these existing metaprogramming functions get a
@@ -301,7 +301,7 @@ have a `get_public_data_members` member function even if the argument to
 With this option, `reflexpr` will return a pointer, instead of a value, that is
 part of a class hierarchy
 
-```
+```c++
 class Type
 {
     // All types have names
@@ -311,7 +311,7 @@ class Type
     //...
 };
 
-class RecordType
+class RecordType : public Type
 {
     // Only record types (like class and union) may have public data members
     std::vector<RecordMember*> get_public_data_members()
@@ -344,7 +344,7 @@ This implies that members such as `get_public_data_members` will not be
 immediately available upon reflection. Instead helper functions would likely be
 provided.
 
-```
+```c++
 std::vector<RecordMember> get_public_data_members(Type t)
     // The behavior is undefined unless 't' is a 'RecordType' or a 'TypeAlias'
     // to a 'RecordType'.
