@@ -415,6 +415,7 @@ Once we answer these questions, we can start filling in the API sketch.
 - If we go with variant and variant-like objects, should we mix in class
   hierarchies where it makes sense? For example, an 'Object' base class? The
   alternative is use of concepts.
+- Are we ready to send this to Daveed and Louis for feedback?
 
 ## Conclusion
 
