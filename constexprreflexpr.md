@@ -1,7 +1,7 @@
 ---
 title: constexpr reflexpr
 subtitle: |
-  - Document number: **P???R1**, ISO/IEC JTC1 SC22 WG21
+  - Document number: **P0953R0**, ISO/IEC JTC1 SC22 WG21
   - Date: 2017-02-11
   - Authors: Matúš Chochlík <chochlik@gmail.com>, Axel Naumann <axel@cern.ch>,
     and David Sankel <dsankel@bloomberg.net>
