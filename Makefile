@@ -1,2 +1,2 @@
 constexprreflexpr.html : constexprreflexpr.md
-	pandoc --standalone --output $@ $<
+	pandoc --toc --standalone --output $@ $<
