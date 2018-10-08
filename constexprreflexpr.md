@@ -1,10 +1,10 @@
 ---
 title: constexpr reflexpr
 subtitle: |
-  - Document number: **P0953R0**, ISO/IEC JTC1 SC22 WG21
-  - Date: 2017-02-11
-  - Authors: Matúš Chochlík <chochlik@gmail.com>, Axel Naumann <axel@cern.ch>,
-    and David Sankel <dsankel@bloomberg.net>
+  - Document number: **P0953R1**, ISO/IEC JTC1 SC22 WG21
+  - Date: 2018-10-07
+  - Authors: Matúš Chochlík &lt;chochlik@gmail.com&gt;, Axel Naumann &lt;axel@cern.ch&gt;,
+    David Sankel &lt;dsankel@bloomberg.net&gt;, and Andrew Sutton &lt;asutton@uakron.edu&gt;
   - Audience: SG7 Reflection
 
   ## Contents
@@ -53,16 +53,24 @@ T min(const T& a, const T& b) {
 </tr>
 </table>
 
-The reflexpr series of papers ([P0385](http://wg21.link/p0385),
-[P0194](http://wg21.link/p0194), [P0578](http://wg21.link/p0578), and most
-recently [P0670](http://wg21.link/p0670)) provide facilities for static
-reflection that are based on the template metaprogramming paradigm. Recently,
-however, language features have been proposed that would enable a more
-natural syntax for metaprogramming through use of `constexpr` facilities
-(See: [P0598](http://wg21.link/p0598), [P0633](http://wg21.link/p0633),
-[P0712](http://wg21.link/p0712), and [P0784](http://wg21.link/p0784)). This
-paper explores the impact of these language facilities on reflexpr and
-considers what a natural-syntax-based reflection library would look like.
+The reflection TS working draft ([N4766](http://wg21.link/N4766)) provide
+facilities for static reflection that are based on the template metaprogramming
+paradigm. Recently, however, language features have been proposed that would
+enable a more natural syntax for metaprogramming through use of `constexpr`
+facilities (See: [P0598](http://wg21.link/p0598),
+[P0633](http://wg21.link/p0633), [P0712](http://wg21.link/p0712), and
+[P0784](http://wg21.link/p0784)). This paper explores the impact of these
+language facilities on reflexpr and considers what a natural-syntax-based
+reflection library would look like.
+
+## Changes
+
+- P0953R1 introduces a new section, [Library Design Alternative], which, based
+  on feedback from SG7, presents an approach using type-erased, by-value
+  objects. Second, `typename` was introduced a disambiguator for `unreflexpr` to
+  address ambiguity in some contexts. Third, a discussion was added to explain
+  the motivation of using pointers instead of references. Finally, the reflect
+  namespace is suggested for placement of type\_traits functions.
 
 ## Introduction
 
@@ -140,12 +148,18 @@ function to accomplish iteration, one could use `hana::for_each` from within
 the `dump` function.
 
 ```c++
-hana::for_each(metaT.get_public_data_members(), [&](auto dataMember) {
-    std::cout
-        << "  " << dataMember.getType().get_display_name()
-        << " " << dataMember.get_display_name()
-        << std::endl;
-});
+template <typename T>
+void dump() {
+    constexpr auto metaT = reflexpr(T);
+    std::cout << "name: " << metaT->get_display_name() << std::endl;
+    std::cout << "members:" << std::endl;
+    hana::for_each(metaT.get_public_data_members(), [&](auto dataMember) {
+        std::cout
+            << "  " << dataMember.getType().get_display_name()
+            << " " << dataMember.get_display_name()
+            << std::endl;
+    });
+}
 ```
 
 While this mitigates much of the syntactic complexity of template
@@ -158,7 +172,7 @@ the Hana-style: instead of `reflexpr` producing a *type*, it produces a
 has a non-opaque type and we normally do not need special library features to
 work with it.
 
-The following snippet illustrates our original example using CXP-reflexper.
+The following snippet illustrates our original example using CXP-reflexpr.
 
 ```c++
 template <typename T>
@@ -266,7 +280,7 @@ originally proposed by Andrew Sutton in [P0589](http://wg21.link/p0589) for
 Hana-style programming, but the unrolling semantics work for our purposes as
 well.
 
-While this language construct isn't strictly necessary for CXP-reflexper, we
+While this language construct isn't strictly necessary for CXP-reflexpr, we
 think it greatly simplifies code that would otherwise require complex library
 facilities.
 
@@ -295,7 +309,7 @@ get_reflected_type_t<
 ```
 
 With CXP-reflexpr, on the other hand, once we have a `Type` object, there isn't
-a language facility for going back into type processing
+a sufficient language facility for going back into type processing
 
 ```c++
 constexpr Type const * t = reflexpr(S)->get_public_data_members()[0]->get_type();
@@ -303,6 +317,10 @@ constexpr Type const * t = reflexpr(S)->get_public_data_members()[0]->get_type()
 // unreflexpr is required to create 'foo' with the type that 't' refers to.
 unreflexpr(t) foo;
 ```
+
+One might think `decltype` would work, but the `Type` returned by reflexpr(X)
+is generic, and has no specialized member types for `X`; there is nothing
+`X`-specific to `decltype()` on.
 
 Therefore, the one language-level feature that is critical for feature parity
 with TMP-reflexpr is `unreflexpr` support. It is required for both types and
@@ -351,6 +369,13 @@ resulting code ended up complex looking, especially for those newer to the
 language. If a language-level variant with pattern matching support were to be
 incorporated into C++, then this might be worth revisiting.
 
+### References vs. pointers
+
+We were initially tempted to use references instead of pointers to provide a
+more value-semantic experience. Unfortunately, the inability to put a reference
+directly in a `std::vector` hinders usability. This design choice would require
+use of the often confusing `std::reference_wrapper` template in several places.
+
 ### Downcasting
 
 While reflecting syntax will produce the most-specific type available, the need
@@ -377,7 +402,7 @@ public:
 };
 ```
 
-These functions allow a user to check if the object can be downcasted and to
+These functions allow a user to check if the object can be downcast and to
 actually perform the operation.
 
 ### type_traits
@@ -393,17 +418,121 @@ Type const * constP = reflexpr(std::add_const_t<unreflexpr(p)>);
 ```
 
 We propose that each of these existing metaprogramming functions get a
-CXP-reflexpr-styled equivalent with a new `_r` suffix.
+CXP-reflexpr-styled equivalent in the `reflect` namespace.
 
 ```c++
-namespace std {
-  constexpr reflect::Type const * add_const_r(reflect::Type const * t)
+namespace std::reflect {
+  constexpr reflect::Type const * add_const(reflect::Type const * t)
   {
     // Not necessarily implemented in this way.
     return reflexpr(std::add_const_t<unreflexpr(t)>);
   }
 }
 ```
+
+## Library Design Alternative
+
+While the use of pointers and an inheritance hierarchy for user syntax has
+benefits, there are two principle problems with this approach. First, as hinted
+at in [P0993r0](http://wg21.link/P0993r0), the storage and linkage of the
+pointed-to value raises some implementability concerns that, while likely
+possible to mitigate, significantly increase the complexity of the approach.
+Second, we have observed a preference from the committee to use value semantics
+instead of pointer semantics whenever possible.
+
+[P0993r0](http://wg21.link/P0993r0) advocated for an approach where `reflexpr`
+would always return values of type `meta::object`. This forces use of concepts
+in the case of overloading. The following snippet shows the changed signatures
+of `outputMetaInformation` as described in [Typeful reflection]:
+
+```c++
+template<reflect::Union u>
+void outputMetaInformation();
+template<reflect::Class c>
+void outputMetaInformation();
+```
+
+Note that `reflect::Union` and `reflect::Class` are concepts and not types. `u`
+and `c`, in this approach, both have type `reflect::object`.
+
+There are three principle drawbacks of this approach. First overloading must
+always use values passed by a template parameter, even when it would not
+otherwise be necessary. This may substantially discourage creation and
+maintenance of reflection code by the large number of C++ developers that would
+not consider themselves experts in the language. Second, requiring concepts to
+do basic things goes against the desire to make metaprogramming look just like
+normal programming. Third, the lack of built-in types may result in the
+proliferation of programs which use `reflect::object` without concepts and
+create a maintenance burden.
+
+A third alternative is to use type-erased, by-value objects. This is like the
+'pointer' approach in that there is a hierarchy of types, but conversion
+operators are used instead of casting to base classes. For example, the
+`RecordMember` type would be,
+
+```c++
+class RecordMember : 
+{
+public:
+    constexpr bool is_public() const;
+    constexpr bool is_protected() const;
+    constexpr bool is_private() const;
+
+    constexpr Record get_type() const;
+    operator Named() const;
+};
+```
+
+, instead of,
+
+```c++
+class RecordMember : public Named
+{
+public:
+    constexpr bool is_public() const;
+    constexpr bool is_protected() const;
+    constexpr bool is_private() const;
+
+    constexpr Record const * get_type() const;
+};
+```
+
+. This approach provides the benefits of typeful programming and those of the
+monotype approach.
+
+Consider the difference between the `get_public_data_members` function of
+`Record` with the monotype style,
+
+```c++
+class Record : public Type
+{
+    //...
+    constexpr std::vector<meta::object> get_public_data_members() const;
+};
+
+// Type provides little information here
+std::vector<meta::object> members
+  = reflexpr(SomeType).get_public_data_members();
+
+// Alternatively, we assume some kind of terse concepts syntax.
+std::vector<meta::RecordMember {}> members
+  = reflexpr(SomeType).get_public_data_members();
+```
+
+, and the type-erased, by-value style,
+
+```c++
+class Record : public Type
+{
+    //...
+    constexpr std::vector<RecordMember> get_public_data_members() const;
+};
+
+std::vector<RecordMember> members
+  = reflexpr(SomeType).get_public_data_members();
+```
+
+. The latter appears at a glance to be typical C++ code.
 
 ## Datatypes and Operations
 
@@ -552,6 +681,12 @@ applies:
 * If `meta` has type `Type const*`, the result is the type that `meta`
   reflects.
 * If `meta` has type `Constant const*`, the result is the value that `meta`
+  reflects. In an otherwise ambiguous context, `meta` must have type `Constant
+  const*`.
+
+`unreflexpr typename(meta)` produces the entities according to the following rules:
+
+* `meta` must have type `Type const*`, the result is the type that `meta`
   reflects.
 
 ## Conclusion
