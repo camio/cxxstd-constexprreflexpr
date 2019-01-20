@@ -1,8 +1,8 @@
 ---
 title: constexpr reflexpr
 subtitle: |
-  - Document number: **P0953R1**, ISO/IEC JTC1 SC22 WG21
-  - Date: 2018-10-07
+  - Document number: **P0953R2**, ISO/IEC JTC1 SC22 WG21
+  - Date: 2019-11-19
   - Authors: Matúš Chochlík &lt;chochlik@gmail.com&gt;, Axel Naumann &lt;axel@cern.ch&gt;,
     David Sankel &lt;dsankel@bloomberg.net&gt;, and Andrew Sutton &lt;asutton@uakron.edu&gt;
   - Audience: SG7 Reflection
@@ -40,9 +40,9 @@ T min(const T& a, const T& b) {
 ```c++
 template <typename T>
 T min(const T& a, const T& b) {
-  constexpr reflect::Type const * metaT = reflexpr(T);
+  constexpr reflect::Type metaT = reflexpr(T);
   log() << "min<"
-        << metaT->get_display_name()
+        << metaT.get_display_name()
         << ">(" << a << ", " << b << ") = ";
   T result = a < b ? a : b;
   log() << result << std::endl;
@@ -53,7 +53,7 @@ T min(const T& a, const T& b) {
 </tr>
 </table>
 
-The reflection TS working draft ([N4766](http://wg21.link/N4766)) provide
+The reflection TS working draft ([N4766](http://wg21.link/N4766)) provides
 facilities for static reflection that are based on the template metaprogramming
 paradigm. Recently, however, language features have been proposed that would
 enable a more natural syntax for metaprogramming through use of `constexpr`
@@ -64,6 +64,10 @@ language facilities on reflexpr and considers what a natural-syntax-based
 reflection library would look like.
 
 ## Changes
+
+- P0953R2 reworked the document to use type-erased, by-value objects per SG7
+  consensus at the 2018 San Diego meeting. The poll to use "type-erased"
+  by-value objects was SF:3, F:7, N:2, A:1, SA:2.
 
 - P0953R1 introduces a new section, [Library Design Alternative], which, based
   on feedback from SG7, presents an approach using type-erased, by-value
@@ -177,13 +181,13 @@ The following snippet illustrates our original example using CXP-reflexpr.
 ```c++
 template <typename T>
 void dump() {
-    constexpr reflect::Record const * metaT = reflexpr(T);
-    std::cout << "name: " << metaT->get_display_name() << std::endl;
+    constexpr reflect::Record metaT = reflexpr(T);
+    std::cout << "name: " << metaT.get_display_name() << std::endl;
     std::cout << "members:" << std::endl;
-    for(RecordMember const * member : metaT->get_public_data_members())
+    for(const RecordMember member : metaT.get_public_data_members())
         std::cout
-            << "  " << member->get_type()->get_display_name()
-            << " " << member->get_name() << std::endl;
+            << "  " << member.get_type().get_display_name()
+            << " " << member.get_name() << std::endl;
 }
 ```
 
@@ -208,17 +212,17 @@ void dumpJson(const int &i);
 template <typename T>
 void dumpJson(const T &t) {
     std::cout << "{ ";
-    constexpr reflect::Class const * metaT = reflexpr(T);
+    constexpr reflect::Class metaT = reflexpr(T);
     bool saw_prev = false;
-    constexpr for(RecordMember const * member : metaT->get_public_data_members())
+    constexpr for(const RecordMember member : metaT.get_public_data_members())
     {
         if(saw_prev) {
             std::cout << ", ";
         }
 
-        std::cout << member->get_name() << "=";
+        std::cout << member.get_name() << "=";
 
-        constexpr reflect::Constant const * pointerToMember = member->get_pointer();
+        constexpr reflect::Constant pointerToMember = member.get_pointer();
         dumpJson(t.*unreflexpr(pointerToMember));
 
         saw_prev = true;
@@ -312,7 +316,7 @@ With CXP-reflexpr, on the other hand, once we have a `Type` object, there isn't
 a sufficient language facility for going back into type processing
 
 ```c++
-constexpr Type const * t = reflexpr(S)->get_public_data_members()[0]->get_type();
+constexpr Type t = reflexpr(S).get_public_data_members()[0].get_type();
 
 // unreflexpr is required to create 'foo' with the type that 't' refers to.
 unreflexpr(t) foo;
@@ -333,30 +337,32 @@ design questions. These are addressed in this section.
 
 ### Typeful reflection
 
-Some of the initial sketches for constexpr-based reflection had the `reflexpr`
-operation produce values that are always of the same type. While this has some
-advantages for implementers and is certainly simpler that each value having its
-own unique type, we feel that making some use of types will encourage
-programming that is easier to read and reason about.
+Some of the initial sketches (and recently [P1240](http://wg21.link/p1240) by
+Andrew Sutton, Faisal Vali, and Daveed Vandevoorde) for constexpr-based
+reflection have the `reflexpr` operation produce values that are always of the
+same type. While this has some advantages for implementers and is certainly
+simpler that each value having its own unique type, we feel that making some
+use of types will encourage programming that is easier to read and reason
+about.
 
 * Typeful reflection enables the use of overloading in library development.
   Consider the simplicity of the following overloaded function when compared to
   a single function implemented with `constexpr if`.
 
     ```c++
-    void outputMetaInformation(reflect::Union const *);
-    void outputMetaInformation(reflect::Class const *);
-    void outputMetaInformation(reflect::Enum const *);
-    void outputMetaInformation(reflect::Type const *);
-    void outputMetaInformation(reflect::TypeAlias const *);
-    void outputMetaInformation(reflect::Namespace const *);
-    void outputMetaInformation(reflect::NamespaceAlias const *);
-    void outputMetaInformation(reflect::RecordMember const *);
-    void outputMetaInformation(reflect::Variable const *);
-    void outputMetaInformation(reflect::Enumerator const *);
+    void outputMetaInformation(reflect::Union);
+    void outputMetaInformation(reflect::Class);
+    void outputMetaInformation(reflect::Enum);
+    void outputMetaInformation(reflect::Type);
+    void outputMetaInformation(reflect::TypeAlias);
+    void outputMetaInformation(reflect::Namespace);
+    void outputMetaInformation(reflect::NamespaceAlias);
+    void outputMetaInformation(reflect::RecordMember);
+    void outputMetaInformation(reflect::Variable);
+    void outputMetaInformation(reflect::Enumerator);
     ```
 * Typeful reflection is similar to the already accepted and sufficiently
-  motivated concepts-based TMP reflexpr. Types to values is what's concepts are
+  motivated concepts-based TMP reflexpr. Types are to values what concepts are
   to types.
 
 * Using untyped reflection has many of the same problem as treating all memory
@@ -371,16 +377,16 @@ incorporated into C++, then this might be worth revisiting.
 
 ### References vs. pointers
 
-We were initially tempted to use references instead of pointers to provide a
-more value-semantic experience. Unfortunately, the inability to put a reference
-directly in a `std::vector` hinders usability. This design choice would require
-use of the often confusing `std::reference_wrapper` template in several places.
+We were initially tempted to use references to provide a value-semantic
+experience. Unfortunately, the inability to put a reference directly in a
+`std::vector` hinders usability. This design choice would require use of the
+often confusing `std::reference_wrapper` template in several places.
 
 ### Downcasting
 
 While reflecting syntax will produce the most-specific type available, the need
 to go from a general type to a specific type remains. For example, the return
-type of `Record::get_public_member_types` is `std::vector<Type const*>`. A user
+type of `Record::get_public_member_types` is `std::vector<Type>`. A user
 may want to "downcast" one of these types into a `Class`, for example.
 
 For this, we provide two cast-related operations in our `Object` class:
@@ -391,7 +397,7 @@ public:
     // ...
 
     template<typename T>
-    constexpr T const * get_as() const;
+    constexpr T get_as() const;
         // Return the specified view, but constexpr-throw (aka diagnose) in
         // case of invalid accesses.
 
@@ -413,8 +419,8 @@ example. While these facilities can be used in the CXP-reflexpr paradigm, it is
 awkward:
 
 ```c++
-Type const * p = /*...*/;
-Type const * constP = reflexpr(std::add_const_t<unreflexpr(p)>);
+Type p = /*...*/;
+Type constP = reflexpr(std::add_const_t<unreflexpr(p)>);
 ```
 
 We propose that each of these existing metaprogramming functions get a
@@ -422,7 +428,7 @@ CXP-reflexpr-styled equivalent in the `reflect` namespace.
 
 ```c++
 namespace std::reflect {
-  constexpr reflect::Type const * add_const(reflect::Type const * t)
+  constexpr reflect::Type add_const(reflect::Type t)
   {
     // Not necessarily implemented in this way.
     return reflexpr(std::add_const_t<unreflexpr(t)>);
@@ -430,7 +436,7 @@ namespace std::reflect {
 }
 ```
 
-## Library Design Alternative
+## Type-erased, by-value objects vs. pointers
 
 While the use of pointers and an inheritance hierarchy for user syntax has
 benefits, there are two principle problems with this approach. First, as hinted
@@ -439,6 +445,8 @@ pointed-to value raises some implementability concerns that, while likely
 possible to mitigate, significantly increase the complexity of the approach.
 Second, we have observed a preference from the committee to use value semantics
 instead of pointer semantics whenever possible.
+
+## Type-erased, by-value objects vs. monotype
 
 [P0993r0](http://wg21.link/P0993r0) advocated for an approach where `reflexpr`
 would always return values of type `meta::object`. This forces use of concepts
@@ -465,10 +473,10 @@ normal programming. Third, the lack of built-in types may result in the
 proliferation of programs which use `reflect::object` without concepts and
 create a maintenance burden.
 
-A third alternative is to use type-erased, by-value objects. This is like the
-'pointer' approach in that there is a hierarchy of types, but conversion
-operators are used instead of casting to base classes. For example, the
-`RecordMember` type would be,
+Type-erased, by-value objects is preferred. This is like the 'pointer' approach
+in that there is a hierarchy of types, but conversion operators are used
+instead of casting to base classes. For example, the `RecordMember` type would
+be,
 
 ```c++
 class RecordMember : 
@@ -480,20 +488,6 @@ public:
 
     constexpr Record get_type() const;
     operator Named() const;
-};
-```
-
-, instead of,
-
-```c++
-class RecordMember : public Named
-{
-public:
-    constexpr bool is_public() const;
-    constexpr bool is_protected() const;
-    constexpr bool is_private() const;
-
-    constexpr Record const * get_type() const;
 };
 ```
 
@@ -514,7 +508,7 @@ class Record : public Type
 std::vector<meta::object> members
   = reflexpr(SomeType).get_public_data_members();
 
-// Alternatively, we assume some kind of terse concepts syntax.
+// Alternatively, assuming some kind of terse concepts syntax.
 std::vector<meta::RecordMember {}> members
   = reflexpr(SomeType).get_public_data_members();
 ```
@@ -559,7 +553,7 @@ public:
     constexpr std::string get_source_file_name() const;
 
     template<typename T>
-    constexpr T const * get_as() const;
+    constexpr T get_as() const;
 
     template<typename T>
     constexpr bool is_a() const;
@@ -576,13 +570,13 @@ class Type : public Named { };
 class Record : public Type
 {
 public:
-    constexpr std::vector<RecordMember const*> get_public_data_members() const;
-    constexpr std::vector<RecordMember const*> get_accessible_data_members() const;
-    constexpr std::vector<RecordMember const*> get_data_members() const;
+    constexpr std::vector<RecordMember> get_public_data_members() const;
+    constexpr std::vector<RecordMember> get_accessible_data_members() const;
+    constexpr std::vector<RecordMember> get_data_members() const;
 
-    constexpr std::vector<Type const*> get_public_member_types() const;
-    constexpr std::vector<Type const*> get_accessible_member_types() const;
-    constexpr std::vector<Type const*> get_member_types() const;
+    constexpr std::vector<Type> get_public_member_types() const;
+    constexpr std::vector<Type> get_accessible_member_types() const;
+    constexpr std::vector<Type> get_member_types() const;
 };
 
 class Union : public Record { };
@@ -593,9 +587,9 @@ public:
     constexpr bool is_struct() const;
     constexpr bool is_class() const;
 
-    constexpr std::vector<Base const*> get_public_bases() const;
-    constexpr std::vector<Base const*> get_accessible_bases() const;
-    constexpr std::vector<Base const*> get_bases() const;
+    constexpr std::vector<Base> get_public_bases() const;
+    constexpr std::vector<Base> get_accessible_bases() const;
+    constexpr std::vector<Base> get_bases() const;
 
     constexpr bool is_final() const;
 };
@@ -603,12 +597,12 @@ public:
 class Enum : public Type
 {
     constexpr bool is_scoped_enum() const;
-    constexpr std::vector<Enumerator const*> get_enumerators() const;
+    constexpr std::vector<Enumerator> get_enumerators() const;
 };
 
 class TypeAlias : public Type
 {
-    constexpr Type const * get_aliased() const;
+    constexpr Type get_aliased() const;
 };
 
 class Variable : public Named
@@ -616,13 +610,13 @@ class Variable : public Named
     constexpr bool is_constexpr() const;
     constexpr bool is_static() const;
 
-    constexpr Constant const * get_pointer() const; 
-    constexpr Type const * get_type() const; 
+    constexpr Constant get_pointer() const; 
+    constexpr Type get_type() const; 
 };
 
 class Base : public Object
 {
-    constexpr Class const * get_class() const;
+    constexpr Class get_class() const;
     constexpr bool is_virtual() const;
     constexpr bool is_public() const;
     constexpr bool is_protected() const;
@@ -637,7 +631,7 @@ class Namespace : public Named
 
 class NamespaceAlias : public Namespace
 {
-    constexpr Namespace const * get_aliased() const;
+    constexpr Namespace get_aliased() const;
 };
 
 class RecordMember : public Named
@@ -646,7 +640,7 @@ class RecordMember : public Named
     constexpr bool is_protected() const;
     constexpr bool is_private() const;
 
-    constexpr Record const * get_type() const;
+    constexpr Record get_type() const;
 };
 
 class Constant : public Variable { };
@@ -663,31 +657,29 @@ class Enumerator : public Constant { };
 `reflexpr( texp )` returns values of types according to the first rule that
 applies:
 
-* If `texp` is a type alias, a `TypeAlias const *` is returned.
-* If `texp` is an enum, a `Enum const *` is returned.
-* If `texp` is a class, a `Class const *` is returned.
-* If `texp` is a union, a `Union const *` is returned.
-* If `texp` is any other type, a `Type const *` is returned.
-* If `texp` is a namespace alias, a `NamespaceAlias const *` is returned.
-* If `texp` is a namespace, a `Namespace const *` is returned.
-* If `texp` is an enumerator, a `Enumerator const *` is returned.
-* If `texp` is a compile-time constant, a `Constant const *` is returned.
-* If `texp` is a variable, a `Variable const *` is returned.
+* If `texp` is a type alias, a `TypeAlias` is returned.
+* If `texp` is an enum, a `Enum` is returned.
+* If `texp` is a class, a `Class` is returned.
+* If `texp` is a union, a `Union` is returned.
+* If `texp` is any other type, a `Type` is returned.
+* If `texp` is a namespace alias, a `NamespaceAlias` is returned.
+* If `texp` is a namespace, a `Namespace` is returned.
+* If `texp` is an enumerator, a `Enumerator` is returned.
+* If `texp` is a compile-time constant, a `Constant` is returned.
+* If `texp` is a variable, a `Variable` is returned.
 
 ### `unreflexpr`
 
 `unreflexpr(meta)` produces the entities according to the following rules:
 
-* If `meta` has type `Type const*`, the result is the type that `meta`
-  reflects.
-* If `meta` has type `Constant const*`, the result is the value that `meta`
-  reflects. In an otherwise ambiguous context, `meta` must have type `Constant
-  const*`.
+* If `meta` has type `Type`, the result is the type that `meta` reflects.
+* If `meta` has type `Constant`, the result is the value that `meta`
+  reflects. In an otherwise ambiguous context, `meta` must have type
+  `Constant`.
 
 `unreflexpr typename(meta)` produces the entities according to the following rules:
 
-* `meta` must have type `Type const*`, the result is the type that `meta`
-  reflects.
+* `meta` must have type `Type`, the result is the type that `meta` reflects.
 
 ## Conclusion
 
