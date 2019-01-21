@@ -4,7 +4,7 @@ subtitle: |
   - Document number: **P0953R2**, ISO/IEC JTC1 SC22 WG21
   - Date: 2019-11-19
   - Authors: Matúš Chochlík &lt;chochlik@gmail.com&gt;, Axel Naumann &lt;axel@cern.ch&gt;,
-    David Sankel &lt;dsankel@bloomberg.net&gt;, and Andrew Sutton &lt;asutton@uakron.edu&gt;
+    and David Sankel &lt;dsankel@bloomberg.net&gt;
   - Audience: SG7 Reflection
 
   ## Contents
@@ -155,11 +155,11 @@ the `dump` function.
 template <typename T>
 void dump() {
     constexpr auto metaT = reflexpr(T);
-    std::cout << "name: " << metaT->get_display_name() << std::endl;
+    std::cout << "name: " << metaT.get_display_name() << std::endl;
     std::cout << "members:" << std::endl;
     hana::for_each(metaT.get_public_data_members(), [&](auto dataMember) {
         std::cout
-            << "  " << dataMember.getType().get_display_name()
+            << "  " << dataMember.get_type().get_display_name()
             << " " << dataMember.get_display_name()
             << std::endl;
     });
@@ -473,13 +473,13 @@ normal programming. Third, the lack of built-in types may result in the
 proliferation of programs which use `reflect::object` without concepts and
 create a maintenance burden.
 
-Type-erased, by-value objects is preferred. This is like the 'pointer' approach
+Type-erased, by-value objects are preferred. This is like the 'pointer' approach
 in that there is a hierarchy of types, but conversion operators are used
 instead of casting to base classes. For example, the `RecordMember` type would
 be,
 
 ```c++
-class RecordMember : 
+class RecordMember
 {
 public:
     constexpr bool is_public() const;
@@ -487,7 +487,7 @@ public:
     constexpr bool is_private() const;
 
     constexpr Record get_type() const;
-    operator Named() const;
+    constexpr operator Named() const;
 };
 ```
 
@@ -498,8 +498,9 @@ Consider the difference between the `get_public_data_members` function of
 `Record` with the monotype style,
 
 ```c++
-class Record : public Type
+class Record
 {
+public:
     //...
     constexpr std::vector<meta::object> get_public_data_members() const;
 };
@@ -516,7 +517,7 @@ std::vector<meta::RecordMember {}> members
 , and the type-erased, by-value style,
 
 ```c++
-class Record : public Type
+class Record
 {
     //...
     constexpr std::vector<RecordMember> get_public_data_members() const;
@@ -530,19 +531,19 @@ std::vector<RecordMember> members
 
 ## Datatypes and Operations
 
-CXP-reflexpr provides a rich class hierarchy representing the various
-attributes that can be reflected. The following diagram illustrates this
-hierarchy.
+CXP-reflexpr provides a rich type hierarchy representing the various attributes
+that can be reflected. The following diagram illustrates this hierarchy.
 
 ![](CXP-reflexpr class hierarchy.png){#id .class width=100%}
 
-Arrows go from derived classes to base classes. The blue classes are those that
-`reflexpr` directly produces values of. The green classes are those that are
-intermediate or indirectly available from the other classes.
+Arrows go from logically derived classes to logically base classes. The blue
+classes are those that `reflexpr` directly produces values of. The green
+classes are those that are intermediate or indirectly available from the other
+classes.
 
 ### Classes
 
-What follows is a short synopsis of the class hierarchy described above.
+What follows is a short synopsis of the hierarchy described above.
 
 ```c++
 namespace reflect {
@@ -559,17 +560,30 @@ public:
     constexpr bool is_a() const;
 };
 
-class Named : public Object {
+class Named {
+public:
+    // Object operations
+    // ...
+    constexpr operator Object() const;
+
     constexpr bool is_anonymous() const;
     constexpr std::string get_name() const;
     constexpr std::string get_display_name() const;
 };
 
-class Type : public Named { };
-
-class Record : public Type
-{
+class Type {
 public:
+    // Named operations
+    // ...
+    constexpr operator Named() const;
+};
+
+class Record {
+public:
+    // Type operations
+    // ...
+    constexpr operator Type() const;
+
     constexpr std::vector<RecordMember> get_public_data_members() const;
     constexpr std::vector<RecordMember> get_accessible_data_members() const;
     constexpr std::vector<RecordMember> get_data_members() const;
@@ -579,11 +593,19 @@ public:
     constexpr std::vector<Type> get_member_types() const;
 };
 
-class Union : public Record { };
-
-class Class : public Record
-{
+class Union {
 public:
+    // Record operations
+    // ...
+    constexpr operator Record() const;
+};
+
+class Class {
+public:
+    // Record operations
+    // ...
+    constexpr operator Record() const;
+
     constexpr bool is_struct() const;
     constexpr bool is_class() const;
 
@@ -594,19 +616,31 @@ public:
     constexpr bool is_final() const;
 };
 
-class Enum : public Type
-{
+class Enum {
+public:
+    // Type operations
+    // ...
+    constexpr operator Type() const;
+
     constexpr bool is_scoped_enum() const;
     constexpr std::vector<Enumerator> get_enumerators() const;
 };
 
-class TypeAlias : public Type
-{
+class TypeAlias {
+public:
+    // Type operations
+    // ...
+    constexpr operator Type() const;
+
     constexpr Type get_aliased() const;
 };
 
-class Variable : public Named
-{
+class Variable {
+public:
+    // Named operations
+    // ...
+    constexpr operator Named() const;
+
     constexpr bool is_constexpr() const;
     constexpr bool is_static() const;
 
@@ -614,8 +648,12 @@ class Variable : public Named
     constexpr Type get_type() const; 
 };
 
-class Base : public Object
-{
+class Base {
+public:
+    // Object operations
+    // ...
+    constexpr operator Object() const;
+
     constexpr Class get_class() const;
     constexpr bool is_virtual() const;
     constexpr bool is_public() const;
@@ -623,19 +661,31 @@ class Base : public Object
     constexpr bool is_private() const;
 };
 
-class Namespace : public Named
-{
+class Namespace {
+public:
+    // Named operations
+    // ...
+    constexpr operator Named() const;
+
     constexpr bool is_global() const;
     constexpr bool is_inline() const;
 };
 
-class NamespaceAlias : public Namespace
-{
+class NamespaceAlias {
+public:
+    // Namespace operations
+    // ...
+    constexpr operator Namespace() const;
+
     constexpr Namespace get_aliased() const;
 };
 
-class RecordMember : public Named
-{
+class RecordMember {
+public:
+    // Named operations
+    // ...
+    constexpr operator Named() const;
+
     constexpr bool is_public() const;
     constexpr bool is_protected() const;
     constexpr bool is_private() const;
@@ -643,9 +693,19 @@ class RecordMember : public Named
     constexpr Record get_type() const;
 };
 
-class Constant : public Variable { };
+class Constant {
+public:
+    // Variable operations
+    // ...
+    constexpr operator Variable() const;
+};
 
-class Enumerator : public Constant { };
+class Enumerator {
+public:
+    // Constant operations
+    // ...
+    constexpr operator Constant() const;
+};
 
 } // namespace reflect
 ```
